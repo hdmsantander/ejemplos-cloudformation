@@ -107,7 +107,7 @@ Resources:
 
   TsisService:
     Type: AWS::ECS::Service
-    DependsOn: ConveniosServiceListener
+    DependsOn: TsisServiceListener
     Properties:
       ServiceName: tsis-service
       Cluster: !Ref Cluster
