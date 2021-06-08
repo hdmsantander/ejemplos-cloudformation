@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Este template genera un clúster en ECS para la ejecución de un contenedor de tipo FARGATE que es guardado en un repositorio de imágenes en ECR. El contenedor es expuesto mediante un balanceador de red (NLB) que rutea el tráfico recibido por el puerto del aplicativo hacia la instancia en ejecución del contenedor.
+Description: Este template genera un cluster en ECS para la ejecucion de un contenedor de tipo FARGATE que es guardado en un repositorio de imagenes en ECR. El contenedor es expuesto mediante un balanceador de red (NLB) que rutea el trafico recibido por el puerto del aplicativo hacia la instancia en ejecucion del contenedor.
 Parameters:
   VPC:
     Type: AWS::EC2::VPC::Id
