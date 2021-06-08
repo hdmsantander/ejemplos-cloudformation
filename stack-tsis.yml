@@ -109,7 +109,7 @@ Resources:
     Type: AWS::ECS::Service
     DependsOn: TsisServiceListener
     Properties:
-      ServiceName: tsis
+      ServiceName: servicio-tsis
       Cluster: !Ref Cluster
       LaunchType: FARGATE
       DeploymentConfiguration:
@@ -129,7 +129,7 @@ Resources:
             - !Ref Subred
       TaskDefinition: !Ref TsisTaskDefinition
       LoadBalancers:
-        - ContainerName: tsis
+        - ContainerName: contenedor-tsis
           ContainerPort: 8080
           TargetGroupArn: !Ref TsisServiceTargetGroup
 
