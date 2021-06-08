@@ -82,11 +82,6 @@ Resources:
       LogGroupName: /ecs/tsis
       RetentionInDays: 30
 
-  TsisEcr:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: tsis
-
   TsisTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -151,7 +146,7 @@ Resources:
       Protocol: TCP
       VpcId: !Ref VPC
 
-  ConveniosServiceListener:
+  TsisServiceListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
