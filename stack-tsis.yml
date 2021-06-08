@@ -109,7 +109,7 @@ Resources:
     Type: AWS::ECS::Service
     DependsOn: TsisServiceListener
     Properties:
-      ServiceName: tsis-service
+      ServiceName: tsis
       Cluster: !Ref Cluster
       LaunchType: FARGATE
       DeploymentConfiguration:
