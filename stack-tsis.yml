@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Este template genera un clúster en ECS para la ejecución de un contenedor de tipo FARGATE que es guardado en un repositorio de imágenes en ECR. El contenedor es expuesto mediante un balanceador de red (NLB) que rutea el tráfico recibido por el puerto del aplicativo hacia la instancia en ejecución del contenedor.
+Parameters:
+  VPC:
+    Type: AWS::EC2::VPC::Id
+    Description: The ID of the VPC on which the application will run, such as vpc-a123baa3.
+  Subred:
+    Type: AWS::EC2::Subnet::Id
+    Description: The ID of the subnet in which both the load balancer and the service will be hosted, such as subnet-456b351e.
+  GrupoSeguridad:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: The security group ID which will be associated with the application, such as sg-b456fd85.
+  ServiciosPrendidos:
+    Type: String
+    Description: Si es true, el contenedor es instanciado y ejecutado, si es false, el contenedor no es instanciado ni ejecutado.
+    AllowedValues:
+      - true
+      - false
+    Default: false
+  RepositorioContenedor:
+    Type: String
+    Description: El URI con el identificador del repositorio de imágenes que aloja el contenedor del aplicativo.
+
+Conditions:
+  EjecutarContenedor: !Equals [!Ref ServiciosPrendidos, 'true']
+
+Outputs:
+  EndpointDelNlb:
+    Description: El endpoint del NLB para exponer la aplicación.
+    Value: !Join ['', ['http://', !GetAtt LoadBalancer.DNSName, ':', '8080']]
+
+Resources:
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Join ['-', ['tsis', 'nlb']]
+      Scheme: internet-facing
+      Subnets:
+        - !Ref Subred
+      Type: network
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Join ['-', ['tsis', cluster]]
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+      CapacityProviders:
+        - FARGATE
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Join ['-', ['tsis', 'execution', 'role']]
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Join ['-', ['tsis', 'task', 'role']]
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+
+  TsisLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/tsis
+      RetentionInDays: 30
+
+  TsisEcr:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: tsis
+
+  TsisTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: tsis
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: contenedor-tsis
+          Image: !Ref RepositorioContenedor
+          PortMappings:
+            - ContainerPort: 8080
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref TsisLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  TsisService:
+    Type: AWS::ECS::Service
+    DependsOn: ConveniosServiceListener
+    Properties:
+      ServiceName: tsis-service
+      Cluster: !Ref Cluster
+      LaunchType: FARGATE
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      DesiredCount: !If
+        - EjecutarContenedor
+        - 1
+        - 0
+      HealthCheckGracePeriodSeconds: 300
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          SecurityGroups:
+            - !Ref GrupoSeguridad
+          Subnets:
+            - !Ref Subred
+      TaskDefinition: !Ref TsisTaskDefinition
+      LoadBalancers:
+        - ContainerName: tsis
+          ContainerPort: 8080
+          TargetGroupArn: !Ref TsisServiceTargetGroup
+
+  TsisServiceTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: LoadBalancer
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: /actuator/health
+      HealthCheckProtocol: HTTP
+      TargetType: ip
+      Name: !Join ['-', ['tsis', 'tg']]
+      Port: 8080
+      Protocol: TCP
+      VpcId: !Ref VPC
+
+  ConveniosServiceListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref TsisServiceTargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 8080
+      Protocol: TCP
